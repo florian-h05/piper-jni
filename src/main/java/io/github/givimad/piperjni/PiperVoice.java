@@ -9,7 +9,7 @@ public class PiperVoice extends PiperJNI.JNIRef {
 
     protected PiperVoice(
             PiperJNI piper,
-            PiperConfig config,
+            String espeakDataPath,
             Path modelPath,
             Path modelConfigPath,
             long speakerId,
@@ -17,7 +17,7 @@ public class PiperVoice extends PiperJNI.JNIRef {
             throws IllegalArgumentException {
         super(
                 piper.loadVoice(
-                        config.ref,
+                        espeakDataPath,
                         modelPath.toAbsolutePath().toString(),
                         modelConfigPath.toAbsolutePath().toString(),
                         speakerId,
@@ -28,11 +28,6 @@ public class PiperVoice extends PiperJNI.JNIRef {
     public boolean getUsesESpeakPhonemes() {
         assertAvailable();
         return piper.voiceUsesESpeakPhonemes(this.ref);
-    }
-
-    public boolean getUsesTashkeelModel() {
-        assertAvailable();
-        return piper.voiceUsesTashkeelModel(this.ref);
     }
 
     /**

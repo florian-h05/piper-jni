@@ -11,34 +11,22 @@ import io.github.givimad.piperjni.internal.NativeUtils;
 public class PiperJNI implements AutoCloseable {
 
     private static boolean libraryLoaded;
-    private PiperConfig currentConfig;
+    private String currentESpeakDataPath;
+    private boolean initialized;
 
     // region native api
-    protected native int newConfig();
-
-    protected native void freeConfig(int configRef);
-
-    protected native void setESpeakDataPath(int configRef, String eSpeakDataPath);
-
-    protected native void setTashkeelModelPath(int configRef, String tashkeelModelPath);
-
-    protected native void initializeConfig(int configRef) throws IOException;
-
-    protected native void terminateConfig(int configRef);
 
     protected native int loadVoice(
-            int configRef, String model, String modelConfig, long speakerId, boolean useCUDA);
+            String espeakDataPath, String model, String modelConfig, long speakerId, boolean useCUDA);
 
     protected native void freeVoice(int voiceRef);
 
     protected native boolean voiceUsesESpeakPhonemes(int voiceRef);
 
-    protected native boolean voiceUsesTashkeelModel(int voiceRef);
-
     protected native int voiceSampleRate(int voiceRef);
 
     private native short[] textToAudio(
-            int configRef, int voiceRef, String text, AudioCallback audioCallback)
+            int voiceRef, String text, AudioCallback audioCallback)
             throws IOException;
 
     private native String getVersion();
@@ -70,40 +58,34 @@ public class PiperJNI implements AutoCloseable {
      * @throws IOException if initialization fails.
      */
     public void initialize() throws IOException {
-        initialize(true, false);
+        initialize(true);
     }
 
     /**
      * Initializes the piper instance configuration. Should be called before using the instance.
      *
      * @param useESpeakPhonemes Support voices with ESpeak phonemes.
-     * @param useTashkeelModel Support voices using the Tashkeel model.
      * @throws IOException if initialization fails.
      */
-    public void initialize(boolean useESpeakPhonemes, boolean useTashkeelModel) throws IOException {
+    public void initialize(boolean useESpeakPhonemes) throws IOException {
         assertRegistered();
-        terminate();
-        PiperConfig config = new PiperConfig(this);
         if (useESpeakPhonemes) {
-            config.setESpeakDataPath(NativeUtils.getESpeakNGData());
+            Path path = NativeUtils.getESpeakNGData();
+            if (path == null) {
+                this.currentESpeakDataPath = null;
+            } else {
+                this.currentESpeakDataPath = path.toAbsolutePath().toString();
+            }
         } else {
-            config.setESpeakDataPath(null);
+            this.currentESpeakDataPath = null;
         }
-        if (useTashkeelModel) {
-            config.setTashkeelModelPath(NativeUtils.getTashkeelModel());
-        } else {
-            config.setTashkeelModelPath(null);
-        }
-        initializeConfig(config.ref);
-        this.currentConfig = config;
+        this.initialized = true;
     }
 
     /** Unload current configuration if any. */
     public void terminate() {
-        if (isInitialized()) {
-            terminateConfig(currentConfig.ref);
-            this.currentConfig = null;
-        }
+        this.currentESpeakDataPath = null;
+        this.initialized = false;
     }
 
     /**
@@ -174,7 +156,7 @@ public class PiperJNI implements AutoCloseable {
                 || Files.isDirectory(modelConfigPath)) {
             throw new FileNotFoundException("Model config file is required");
         }
-        return new PiperVoice(this, currentConfig, modelPath, modelConfigPath, speakerId, useCUDA);
+        return new PiperVoice(this, currentESpeakDataPath, modelPath, modelConfigPath, speakerId, useCUDA);
     }
 
     /**
@@ -218,7 +200,7 @@ public class PiperJNI implements AutoCloseable {
             // return empty.
             return new short[] {};
         }
-        return textToAudio(currentConfig.ref, voice.ref, text, audioCallback);
+        return textToAudio(voice.ref, text, audioCallback);
     }
 
     /**
@@ -227,7 +209,7 @@ public class PiperJNI implements AutoCloseable {
      * @return true if piper was initialized
      */
     public boolean isInitialized() {
-        return currentConfig != null && !currentConfig.isReleased();
+        return initialized;
     }
 
     /**

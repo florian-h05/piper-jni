@@ -12,12 +12,6 @@
 #define STR(x) #x
 #define XSTR(x) STR(x)
 
-struct JNIConfig {
-    std::string eSpeakDataPath;
-    std::string tashkeelModelPath;
-};
-
-std::map<int, JNIConfig*> configMap;
 std::map<int, piper_synthesizer*> voiceMap;
 
 // Disable library log
@@ -53,17 +47,6 @@ void swallow_cpp_exception_and_throw_java(JNIEnv * env) {
     }
 }
 
-int getConfigId() {
-    int i = 0;
-    while (i++ < 1000) {
-        int id = rand();
-        if(!configMap.count(id)) {
-            return id;
-        }
-    }
-    throw std::runtime_error("Wrapper error: Unable to get config id");
-}
-
 int getVoiceId() {
     int i = 0;
     while (i++ < 1000) {
@@ -77,67 +60,23 @@ int getVoiceId() {
 
 // JNI Implementations
 
-JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_newConfig(JNIEnv *env, jobject thisObject) {
+JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_loadVoice(JNIEnv *env, jobject thisObject, jstring espeakDataPath, jstring modelPath, jstring modelConfigPath, jlong jSpeakerId, jboolean useCUDA) {
     try {
-        int ref = getConfigId();
-        JNIConfig* config = new JNIConfig();
-        configMap.insert({ref, config});
-        return ref;
-    } catch (const std::exception&) {
-        swallow_cpp_exception_and_throw_java(env);
-        return -1;
-    }
-}
+        const char* cEspeakDataPath = nullptr;
+        if (espeakDataPath) {
+             cEspeakDataPath = env->GetStringUTFChars(espeakDataPath, NULL);
+        }
 
-JNIEXPORT void JNICALL Java_io_github_givimad_piperjni_PiperJNI_setESpeakDataPath(JNIEnv *env, jobject thisObject, jint configRef, jstring jValue) {
-    if(jValue) {
-        const char* cValue = env->GetStringUTFChars(jValue, NULL);
-        std::string cppValue(cValue);
-        env->ReleaseStringUTFChars(jValue, cValue);
-        configMap.at(configRef)->eSpeakDataPath = cppValue;
-    } else {
-        configMap.at(configRef)->eSpeakDataPath = "";
-    }
-}
-
-JNIEXPORT void JNICALL Java_io_github_givimad_piperjni_PiperJNI_setTashkeelModelPath(JNIEnv *env, jobject thisObject, jint configRef, jstring jValue) {
-    if(jValue) {
-        const char* cValue = env->GetStringUTFChars(jValue, NULL);
-        std::string cppValue(cValue);
-        env->ReleaseStringUTFChars(jValue, cValue);
-        configMap.at(configRef)->tashkeelModelPath = cppValue;
-    } else {
-        configMap.at(configRef)->tashkeelModelPath = "";
-    }
-}
-
-JNIEXPORT void JNICALL Java_io_github_givimad_piperjni_PiperJNI_initializeConfig(JNIEnv *env, jobject thisObject, jint configRef) {
-    // No-op for now as piper_create handles initialization
-}
-
-JNIEXPORT void JNICALL Java_io_github_givimad_piperjni_PiperJNI_terminateConfig(JNIEnv *env, jobject thisObject, jint configRef) {
-    // No-op
-}
-
-JNIEXPORT void JNICALL Java_io_github_givimad_piperjni_PiperJNI_freeConfig(JNIEnv *env, jobject thisObject, jint configRef) {
-    if (configMap.count(configRef)) {
-        delete configMap.at(configRef);
-        configMap.erase(configRef);
-    }
-}
-
-JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_loadVoice(JNIEnv *env, jobject thisObject, jint configRef, jstring modelPath, jstring modelConfigPath, jlong jSpeakerId, jboolean useCUDA) {
-    try {
-        JNIConfig* config = configMap.at(configRef);
         const char* cModelPath = env->GetStringUTFChars(modelPath, NULL);
         const char* cModelConfigPath = env->GetStringUTFChars(modelConfigPath, NULL);
-        // Use espeak data path from config
-        const char* cEspeakDataPath = config->eSpeakDataPath.empty() ? nullptr : config->eSpeakDataPath.c_str();
 
         piper_synthesizer* voice = piper_create(cModelPath, cModelConfigPath, cEspeakDataPath);
 
         env->ReleaseStringUTFChars(modelPath, cModelPath);
         env->ReleaseStringUTFChars(modelConfigPath, cModelConfigPath);
+        if (espeakDataPath) {
+             env->ReleaseStringUTFChars(espeakDataPath, cEspeakDataPath);
+        }
 
         if (!voice) {
              NewJavaException(env, "java/lang/RuntimeException", "Failed to load voice");
@@ -167,16 +106,6 @@ JNIEXPORT jboolean JNICALL Java_io_github_givimad_piperjni_PiperJNI_voiceUsesESp
     }
 }
 
-JNIEXPORT jboolean JNICALL Java_io_github_givimad_piperjni_PiperJNI_voiceUsesTashkeelModel(JNIEnv *env, jobject thisClass, jint voiceRef) {
-    try {
-        piper_synthesizer* voice = voiceMap.at(voiceRef);
-        return (voice->espeak_voice == "ar");
-    } catch (const std::exception&) {
-        swallow_cpp_exception_and_throw_java(env);
-        return false;
-    }
-}
-
 JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_voiceSampleRate(JNIEnv *env, jobject thisObject, jint voiceRef) {
     try {
         return (jint) voiceMap.at(voiceRef)->sample_rate;
@@ -193,7 +122,7 @@ JNIEXPORT void JNICALL Java_io_github_givimad_piperjni_PiperJNI_freeVoice(JNIEnv
     }
 }
 
-JNIEXPORT jshortArray JNICALL Java_io_github_givimad_piperjni_PiperJNI_textToAudio(JNIEnv *env, jobject thisObject, jint configRef, jint voiceRef, jstring jText, jobject jAudioCallback) {
+JNIEXPORT jshortArray JNICALL Java_io_github_givimad_piperjni_PiperJNI_textToAudio(JNIEnv *env, jobject thisObject, jint voiceRef, jstring jText, jobject jAudioCallback) {
     try {
         piper_synthesizer* voice = voiceMap.at(voiceRef);
         const char* cText = env->GetStringUTFChars(jText, NULL);

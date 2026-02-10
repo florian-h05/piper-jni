@@ -47,7 +47,7 @@ public class PiperJNITest {
     @Test
     public void initializePiper() throws IOException {
         try {
-            piper.initialize(true, false);
+            piper.initialize(true);
         } finally {
             piper.terminate();
         }
@@ -90,7 +90,7 @@ public class PiperJNITest {
             textToSpeak = DEFAULT_TEXT_TO_SPEAK;
         }
         try {
-            piper.initialize(true, true);
+            piper.initialize(true);
             try (var voice = piper.loadVoice(Paths.get(voiceModel), Path.of(voiceModelConfig), 0)) {
                 assertNotNull(voice);
                 int sampleRate = voice.getSampleRate();
@@ -119,7 +119,7 @@ public class PiperJNITest {
             textToSpeak = DEFAULT_TEXT_TO_SPEAK;
         }
         try {
-            piper.initialize(true, false);
+            piper.initialize(true);
             try (var voice = piper.loadVoice(Paths.get(voiceModel), Path.of(voiceModelConfig))) {
                 assertNotNull(voice);
                 int sampleRate = voice.getSampleRate();
