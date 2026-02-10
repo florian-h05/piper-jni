@@ -176,7 +176,3 @@ install(
   DESTINATION ${CMAKE_INSTALL_PREFIX}/..
 )
 
-install(
-  FILES ${PIPER_PHONEMIZE_DIR}/share/libtashkeel_model.ort
-  DESTINATION ${CMAKE_INSTALL_PREFIX}/..
-)

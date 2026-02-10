@@ -60,7 +60,7 @@ int getVoiceId() {
 
 // JNI Implementations
 
-JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_loadVoice(JNIEnv *env, jobject thisObject, jstring espeakDataPath, jstring modelPath, jstring modelConfigPath, jlong jSpeakerId, jboolean useCUDA) {
+JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_loadVoice(JNIEnv *env, jobject thisObject, jstring espeakDataPath, jstring modelPath, jstring modelConfigPath, jlong jSpeakerId) {
     try {
         const char* cEspeakDataPath = nullptr;
         if (espeakDataPath) {

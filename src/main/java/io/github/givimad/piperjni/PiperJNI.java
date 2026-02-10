@@ -17,7 +17,7 @@ public class PiperJNI implements AutoCloseable {
     // region native api
 
     protected native int loadVoice(
-            String espeakDataPath, String model, String modelConfig, long speakerId, boolean useCUDA);
+            String espeakDataPath, String model, String modelConfig, long speakerId);
 
     protected native void freeVoice(int voiceRef);
 
@@ -99,7 +99,7 @@ public class PiperJNI implements AutoCloseable {
      */
     public PiperVoice loadVoice(Path modelPath, Path modelConfigPath)
             throws IOException, NotInitialized {
-        return loadVoice(modelPath, modelConfigPath, -1, false);
+        return loadVoice(modelPath, modelConfigPath, -1);
     }
 
     /**
@@ -108,44 +108,13 @@ public class PiperJNI implements AutoCloseable {
      * @param modelPath model file path
      * @param modelConfigPath model config file path
      * @param speakerId Speaker id or -1.
-     * @return a {@link PiperVoice} instance
-     * @throws FileNotFoundException if models or config doesn't exist
-     * @throws NotInitialized if piper was not initialized
-     */
-    public PiperVoice loadVoice(Path modelPath, Path modelConfigPath, long speakerId)
-            throws IOException, NotInitialized {
-        return loadVoice(modelPath, modelConfigPath, speakerId, false);
-    }
-
-    /**
-     * Loads piper voice model and config.
-     *
-     * @param modelPath model file path
-     * @param modelConfigPath model config file path
-     * @param useCUDA Use CUDA
-     * @return a {@link PiperVoice} instance
-     * @throws FileNotFoundException if models or config doesn't exist
-     * @throws NotInitialized if piper was not initialized
-     */
-    public PiperVoice loadVoice(Path modelPath, Path modelConfigPath, boolean useCUDA)
-            throws IOException, NotInitialized {
-        return loadVoice(modelPath, modelConfigPath, -1, useCUDA);
-    }
-
-    /**
-     * Loads piper voice model and config.
-     *
-     * @param modelPath model file path
-     * @param modelConfigPath model config file path
-     * @param speakerId Speaker id or -1.
-     * @param useCUDA Use CUDA
      * @return a {@link PiperVoice} instance
      * @throws FileNotFoundException if models or config doesn't exist
      * @throws NotInitialized if piper was not initialized
      */
     public PiperVoice loadVoice(
-            Path modelPath, Path modelConfigPath, long speakerId, boolean useCUDA)
-            throws FileNotFoundException, NotInitialized {
+            Path modelPath, Path modelConfigPath, long speakerId)
+            throws IOException, NotInitialized {
         assertRegistered();
         assertInitialized();
         if (modelPath == null || !Files.exists(modelPath) || Files.isDirectory(modelPath)) {
@@ -156,7 +125,7 @@ public class PiperJNI implements AutoCloseable {
                 || Files.isDirectory(modelConfigPath)) {
             throw new FileNotFoundException("Model config file is required");
         }
-        return new PiperVoice(this, currentESpeakDataPath, modelPath, modelConfigPath, speakerId, useCUDA);
+        return new PiperVoice(this, currentESpeakDataPath, modelPath, modelConfigPath, speakerId);
     }
 
     /**

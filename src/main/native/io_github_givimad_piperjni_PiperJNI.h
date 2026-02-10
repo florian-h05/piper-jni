@@ -10,10 +10,10 @@ extern "C" {
 /*
  * Class:     io_github_givimad_piperjni_PiperJNI
  * Method:    loadVoice
- * Signature: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JZ)I
+ * Signature: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;J)I
  */
 JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_loadVoice
-  (JNIEnv *, jobject, jstring, jstring, jstring, jlong, jboolean);
+  (JNIEnv *, jobject, jstring, jstring, jstring, jlong);
 
 /*
  * Class:     io_github_givimad_piperjni_PiperJNI
