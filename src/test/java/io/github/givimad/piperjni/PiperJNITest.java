@@ -14,6 +14,7 @@ import javax.naming.ConfigurationException;
 import javax.sound.sampled.AudioFileFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.UnsupportedAudioFileException;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -96,7 +97,9 @@ public class PiperJNITest {
                 int sampleRate = voice.getSampleRate();
                 short[] samples = piper.textToAudio(voice, textToSpeak);
                 assertNotEquals(0, samples.length);
-                createWAVFile(List.of(samples), sampleRate, Path.of(TEST_DIR, "test.wav"));
+                Path outPath = Path.of(TEST_DIR, "test.wav");
+                createWAVFile(List.of(samples), sampleRate, outPath);
+                verifyAudioFile(outPath);
             }
         } finally {
             piper.terminate();
@@ -130,6 +133,7 @@ public class PiperJNITest {
                 Path outPath = Path.of(TEST_DIR, "test-stream.wav");
                 createWAVFile(audioSamplesChunks, sampleRate, outPath);
                 assertTrue(Files.exists(outPath));
+                verifyAudioFile(outPath);
             }
         } finally {
             piper.terminate();
@@ -165,6 +169,24 @@ public class PiperJNITest {
             audioFileOutputStream.close();
         } catch (IOException e) {
             System.err.println("Unable to store sample: " + e.getMessage());
+        }
+    }
+
+    private void verifyAudioFile(Path path) throws IOException {
+        assertTrue(Files.exists(path), "Audio file should exist");
+        try (AudioInputStream audioInputStream = AudioSystem.getAudioInputStream(path.toFile())) {
+            assertNotEquals(0, audioInputStream.getFrameLength(), "Audio file should have frames");
+            byte[] bytes = audioInputStream.readAllBytes();
+            boolean hasAudio = false;
+            for (byte b : bytes) {
+                if (b != 0) {
+                    hasAudio = true;
+                    break;
+                }
+            }
+            assertTrue(hasAudio, "Audio file should contain non-silent audio data");
+        } catch (UnsupportedAudioFileException e) {
+            throw new IOException("Unsupported audio file format", e);
         }
     }
 }
