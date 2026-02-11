@@ -17,16 +17,13 @@ set(PIPER_SRC_DIR "${CMAKE_CURRENT_BINARY_DIR}/piper_patched/piper")
 file(REMOVE_RECURSE "${CMAKE_CURRENT_BINARY_DIR}/piper_patched")
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/src/main/native/piper" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/piper_patched" PATTERN ".git" EXCLUDE)
 
-# Find patch program
-find_program(PATCH_PROGRAM patch)
-if(NOT PATCH_PROGRAM)
-    message(FATAL_ERROR "patch program not found")
-endif()
+# Find git to use for applying patches
+find_package(Git REQUIRED)
 
 # Apply patch
-# Added --binary for Windows EOL handling and --ignore-whitespace for robustness
+# Using 'git apply' is more robust for line endings and git-generated patches than the 'patch' utility
 execute_process(
-    COMMAND "${PATCH_PROGRAM}" -p1 --binary --ignore-whitespace -i "${CMAKE_CURRENT_SOURCE_DIR}/src/main/native/piper_fixes.patch"
+    COMMAND "${GIT_EXECUTABLE}" apply --ignore-space-change --ignore-whitespace "${CMAKE_CURRENT_SOURCE_DIR}/src/main/native/piper_fixes.patch"
     WORKING_DIRECTORY "${PIPER_SRC_DIR}"
     RESULT_VARIABLE patch_result
 )
