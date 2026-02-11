@@ -13,15 +13,16 @@
 #define XSTR(x) STR(x)
 
 std::map<int, piper_synthesizer*> voiceMap;
+std::mutex voiceMapMutex;
 
 // Disable library log
 class StartUp
 {
 public:
-   StartUp()
-   {
-    spdlog::set_level(spdlog::level::off);
-   }
+    StartUp()
+    {
+        spdlog::set_level(spdlog::level::off);
+    }
 };
 StartUp startup;
 
@@ -93,6 +94,7 @@ JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_loadVoice(JNIEnv
              voice->speaker_id = (SpeakerId)jSpeakerId;
         }
 
+        std::lock_guard<std::mutex> lock(voiceMapMutex);
         int ref = getVoiceId();
         voiceMap.insert({ref, voice});
         return ref;
@@ -104,7 +106,9 @@ JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_loadVoice(JNIEnv
 
 JNIEXPORT jboolean JNICALL Java_io_github_givimad_piperjni_PiperJNI_voiceUsesESpeakPhonemes(JNIEnv *env, jobject thisObject, jint voiceRef) {
     try {
-        return true;
+        std::lock_guard<std::mutex> lock(voiceMapMutex);
+        piper_synthesizer* voice = voiceMap.at(voiceRef);
+        return !voice->espeak_voice.empty();
     } catch (const std::exception&) {
         swallow_cpp_exception_and_throw_java(env);
         return false;
@@ -113,6 +117,7 @@ JNIEXPORT jboolean JNICALL Java_io_github_givimad_piperjni_PiperJNI_voiceUsesESp
 
 JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_voiceSampleRate(JNIEnv *env, jobject thisObject, jint voiceRef) {
     try {
+        std::lock_guard<std::mutex> lock(voiceMapMutex);
         return (jint) voiceMap.at(voiceRef)->sample_rate;
     } catch (const std::exception&) {
         swallow_cpp_exception_and_throw_java(env);
@@ -121,6 +126,7 @@ JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_voiceSampleRate(
 }
 
 JNIEXPORT void JNICALL Java_io_github_givimad_piperjni_PiperJNI_freeVoice(JNIEnv *env, jobject thisObject, jint voiceRef) {
+    std::lock_guard<std::mutex> lock(voiceMapMutex);
     if (voiceMap.count(voiceRef)) {
         piper_free(voiceMap.at(voiceRef));
         voiceMap.erase(voiceRef);
@@ -129,7 +135,11 @@ JNIEXPORT void JNICALL Java_io_github_givimad_piperjni_PiperJNI_freeVoice(JNIEnv
 
 JNIEXPORT jshortArray JNICALL Java_io_github_givimad_piperjni_PiperJNI_textToAudio(JNIEnv *env, jobject thisObject, jint voiceRef, jstring jText, jobject jAudioCallback) {
     try {
-        piper_synthesizer* voice = voiceMap.at(voiceRef);
+        piper_synthesizer* voice = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(voiceMapMutex);
+            voice = voiceMap.at(voiceRef);
+        }
         const char* cText = env->GetStringUTFChars(jText, NULL);
         std::string cppText(cText);
         env->ReleaseStringUTFChars(jText, cText);
@@ -150,12 +160,16 @@ JNIEXPORT jshortArray JNICALL Java_io_github_givimad_piperjni_PiperJNI_textToAud
         if (jAudioCallback) {
              cbClass = env->GetObjectClass(jAudioCallback);
              cbMethodId = env->GetMethodID(cbClass, "onAudio", "([S)V");
+             if (cbMethodId == NULL) {
+                 // Exception already thrown by GetMethodID
+                 return NULL;
+             }
         }
 
         while ((ret = piper_synthesize_next(voice, &chunk)) != PIPER_DONE) {
              if (ret != PIPER_OK) {
-                  // Error
-                  break;
+                  NewJavaException(env, "java/lang/RuntimeException", "Synthesis failed");
+                  return NULL;
              }
              if (chunk.num_samples > 0) {
                   std::vector<int16_t> chunkSamples;
@@ -178,6 +192,9 @@ JNIEXPORT jshortArray JNICALL Java_io_github_givimad_piperjni_PiperJNI_textToAud
                         env->ReleaseShortArrayElements(jAudioBuffer, jSamples, 0);
                         env->CallVoidMethod(jAudioCallback, cbMethodId, jAudioBuffer);
                         env->DeleteLocalRef(jAudioBuffer);
+                        if (env->ExceptionCheck()) {
+                            return NULL;
+                        }
                   } else {
                         fullAudioBuffer.insert(fullAudioBuffer.end(), chunkSamples.begin(), chunkSamples.end());
                   }
