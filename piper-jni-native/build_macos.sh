@@ -1,4 +1,6 @@
+#!/bin/bash
 set -xe
+cd "$(dirname "$0")"
 
 AARCH=${1:-$(uname -m)}
 case "$AARCH" in

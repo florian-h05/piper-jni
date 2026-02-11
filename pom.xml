@@ -4,11 +4,12 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>io.github.givimad</groupId>
-  <artifactId>piper-jni</artifactId>
+  <artifactId>piper-parent</artifactId>
   <version>1.2.0-73c04d81</version>
+  <packaging>pom</packaging>
 
-  <name>piper-jni</name>
-  <description>A JNI wrapper for Piper</description>
+  <name>piper-parent</name>
+  <description>Parent project for Piper JNI</description>
   <url>https://github.com/GiviMAD/piper-jni</url>
 
   <licenses>
@@ -32,6 +33,11 @@
       <organizationUrl>https://github.com/GiviMAD</organizationUrl>
     </developer>
   </developers>
+
+  <modules>
+    <module>piper-jni</module>
+    <module>piper-jni-native</module>
+  </modules>
   <scm>
     <connection>scm:git:git://github.com/givimad/piper-jni.git</connection>
     <developerConnection>scm:git:git://github.com/GiviMAD/piper-jni.git</developerConnection>
@@ -56,24 +62,25 @@
     <maven.compiler.target>11</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
-  <dependencies>
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-api</artifactId>
-      <version>5.10.1</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <version>5.10.1</version>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.junit.jupiter</groupId>
+        <artifactId>junit-jupiter-api</artifactId>
+        <version>5.10.1</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.junit.jupiter</groupId>
+        <artifactId>junit-jupiter</artifactId>
+        <version>5.10.1</version>
+        <scope>test</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
   <build>
     <pluginManagement>
       <plugins>
-        <!-- default lifecycle, jar packaging: see https://maven.apache.org/ref/current/maven-core/default-bindings.html#Plugin_bindings_for_jar_packaging -->
         <plugin>
           <artifactId>maven-resources-plugin</artifactId>
           <version>3.0.2</version>
@@ -98,7 +105,6 @@
           <artifactId>maven-deploy-plugin</artifactId>
           <version>2.8.2</version>
         </plugin>
-        <!-- site lifecycle, see https://maven.apache.org/ref/current/maven-core/lifecycles.html#site_Lifecycle -->
         <plugin>
           <artifactId>maven-site-plugin</artifactId>
           <version>3.7.1</version>
@@ -107,21 +113,17 @@
           <artifactId>maven-project-info-reports-plugin</artifactId>
           <version>3.0.0</version>
         </plugin>
-        <!-- Spotless Plugin -->
         <plugin>
           <groupId>com.diffplug.spotless</groupId>
           <artifactId>spotless-maven-plugin</artifactId>
           <version>${spotless.version}</version>
           <configuration>
             <formats>
-              <!-- you can define as many formats as you want, each is independent -->
               <format>
-                <!-- define the files to apply to -->
                 <includes>
                   <include>.gitattributes</include>
                   <include>.gitignore</include>
                 </includes>
-                <!-- define the steps to apply to those files -->
                 <trimTrailingWhitespace/>
                 <endWithNewline/>
                 <indent>
@@ -137,14 +139,11 @@
                 <reflowLongStrings>true</reflowLongStrings>
                 <formatJavadoc>true</formatJavadoc>
               </googleJavaFormat>
-
               <importOrder>
                 <wildcardsLast>true</wildcardsLast>
                 <order>\#dev.digiried.wattpilot,dev.digiried.wattpilot,java|javax|jakarta,\#</order>
-                <!-- you can use an empty string for all the imports you didn't specify explicitly, '|' to join group without blank line, and '\#` prefix for static imports. -->
               </importOrder>
             </java>
-
             <pom>
               <sortPom>
                 <expandEmptyElements>false</expandEmptyElements>
@@ -164,23 +163,30 @@
             </execution>
           </executions>
         </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-clean-plugin</artifactId>
+          <version>3.5.0</version>
+          <configuration>
+            <filesets>
+              <fileset>
+                <directory>test-data</directory>
+                <followSymlinks>false</followSymlinks>
+              </fileset>
+            </filesets>
+          </configuration>
+        </plugin>
       </plugins>
     </pluginManagement>
     <plugins>
       <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-clean-plugin</artifactId>
-        <version>3.5.0</version>
-        <configuration>
-          <filesets>
-            <fileset>
-              <directory>test-data</directory>
-              <followSymlinks>false</followSymlinks>
-            </fileset>
-          </filesets>
-        </configuration>
       </plugin>
-      <!-- Attach source jars-->
       <plugin>
         <artifactId>maven-source-plugin</artifactId>
         <version>3.2.1</version>
@@ -194,7 +200,6 @@
           </execution>
         </executions>
       </plugin>
-      <!-- Attach javadocs jar -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>

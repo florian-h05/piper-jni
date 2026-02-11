@@ -1,5 +1,6 @@
 #!/bin/bash
 set -xe
+cd "$(dirname "$0")"
 
 # Use TARGETARCH if provided (e.g. from Docker)
 # Otherwise, try to detect it using uname -m

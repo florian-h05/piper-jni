@@ -1,16 +1,18 @@
 #!/bin/bash
 set -e
 
-# Ensure we are in the project root
+# Ensure we are in the script directory
 cd "$(dirname "$0")"
 
 echo "Building native libraries for all supported platforms using Docker..."
 
 # Initialize submodules if not already done
-if [ ! -f "src/main/native/piper/VERSION" ]; then
+pushd ..
+if [ ! -f "piper-jni-native/src/main/native/piper/VERSION" ]; then
     echo "Initializing submodules..."
     git submodule update --init --recursive
 fi
+popd
 
 # Build for Linux amd64, arm64, and armv7l
 # The --output flag extracts the built libraries from the 'export' stage
@@ -21,10 +23,17 @@ docker buildx build \
     --output "type=local,dest=src/main/resources/temp_build" \
     .
 
-mv src/main/resources/temp_build/linux_amd64/*.zip src/main/resources/
-mv src/main/resources/temp_build/linux_amd64/* src/main/resources/debian-amd64/
-mv src/main/resources/temp_build/linux_arm64/* src/main/resources/debian-arm64/
-mv src/main/resources/temp_build/linux_arm_v7/* src/main/resources/debian-armv7l/
+# Move artifacts
+if [ -d "src/main/resources/temp_build/linux_amd64" ]; then
+    mv src/main/resources/temp_build/linux_amd64/*.zip src/main/resources/ 2>/dev/null || true
+    mv src/main/resources/temp_build/linux_amd64/* src/main/resources/debian-amd64/
+fi
+if [ -d "src/main/resources/temp_build/linux_arm64" ]; then
+    mv src/main/resources/temp_build/linux_arm64/* src/main/resources/debian-arm64/
+fi
+if [ -d "src/main/resources/temp_build/linux_arm_v7" ]; then
+    mv src/main/resources/temp_build/linux_arm_v7/* src/main/resources/debian-armv7l/
+fi
 
 rm -rf src/main/resources/temp_build
 

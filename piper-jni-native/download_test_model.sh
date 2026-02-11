@@ -1,6 +1,7 @@
 #!/bin/bash
 # This script downloads the models required for the PiperJNITest as documented in the README.
 set -e
+cd "$(dirname "$0")"
 
 TEST_DATA_DIR="test-data"
 MODEL_NAME="es_ES-sharvard-medium.onnx"

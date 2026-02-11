@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.github.givimad</groupId>
+    <artifactId>piper-parent</artifactId>
+    <version>1.2.0-73c04d81</version>
+  </parent>
+
+  <artifactId>piper-jni</artifactId>
+  <packaging>jar</packaging>
+
+  <name>piper-jni</name>
+  <description>A JNI wrapper for Piper (Pure Java)</description>
+
+  <licenses>
+    <license>
+      <name>Apache License, Version 2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <comments>Applies to the Java source code and JAR builds without the native libraries included</comments>
+    </license>
+  </licenses>
+</project>

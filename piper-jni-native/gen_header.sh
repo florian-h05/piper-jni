@@ -1,6 +1,7 @@
 set -xe
+cd "$(dirname "$0")"
 
-LIB_SRC=src/main/java/io/github/givimad/piperjni
+LIB_SRC=../piper-jni/src/main/java/io/github/givimad/piperjni
 
 javac -h src/main/native \
 $LIB_SRC/internal/NativeUtils.java \
