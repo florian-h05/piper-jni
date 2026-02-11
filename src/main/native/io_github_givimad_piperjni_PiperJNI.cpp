@@ -19,19 +19,21 @@ class StartUp
 {
 public:
    StartUp()
-   { 
+   {
     spdlog::set_level(spdlog::level::off);
    }
 };
 StartUp startup;
 
 // Exception helper
+// From https://stackoverflow.com/a/12014833/6189530
 struct NewJavaException {
     NewJavaException(JNIEnv * env, const char* type="", const char* message="")
     {
         jclass newExcCls = env->FindClass(type);
         if (newExcCls != NULL)
             env->ThrowNew(newExcCls, message);
+        // if it is null, a NoClassDefFoundError was already thrown
     }
 };
 
@@ -39,10 +41,13 @@ void swallow_cpp_exception_and_throw_java(JNIEnv * env) {
     try {
         throw;
     } catch(const std::bad_alloc& rhs) {
+        // translate OOM C++ exception to Java exception
         NewJavaException(env, "java/lang/OutOfMemoryError", rhs.what());
     } catch(const std::exception& e) {
+        // translate IO C++ exception to Java exception
         NewJavaException(env, "java/lang/RuntimeException", e.what());
     } catch(...) {
+        // translate unknown C++ exception to Java error
         NewJavaException(env, "java/lang/Error", "Unknown native exception type");
     }
 }

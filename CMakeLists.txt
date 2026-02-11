@@ -23,7 +23,10 @@ endif()
 
 file(READ "${PIPER_SRC_DIR}/setup.py" setup_py_content)
 string(REGEX MATCH "version=\"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _ "${setup_py_content}")
-set(piper_version ${CMAKE_MATCH_1})
+if(NOT CMAKE_MATCH_1)
+    message(FATAL_ERROR "Failed to extract piper version from setup.py.")
+endif()
+set(piper_version "\"${CMAKE_MATCH_1}\"")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
