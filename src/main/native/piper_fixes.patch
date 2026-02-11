@@ -1,7 +1,7 @@
-diff --git a/libpiper/include/piper_impl.hpp b/libpiper/include/piper_impl.hpp
+diff --git a/piper_orig/libpiper/include/piper_impl.hpp b/piper_fixed/libpiper/include/piper_impl.hpp
 index aa12a1d..9befcf7 100644
---- a/libpiper/include/piper_impl.hpp
-+++ b/libpiper/include/piper_impl.hpp
+--- a/piper_orig/libpiper/include/piper_impl.hpp
++++ b/piper_fixed/libpiper/include/piper_impl.hpp
 @@ -35,7 +35,7 @@ const float DEFAULT_NOISE_W_SCALE = 0.8f;
  const int DEFAULT_HOP_LENGTH = 256;
 
@@ -20,10 +20,10 @@ index aa12a1d..9befcf7 100644
      auto view = una::views::utf8(s);
      auto it = view.begin();
 
-diff --git a/libpiper/src/piper.cpp b/libpiper/src/piper.cpp
-index 774e87d..49e12f5 100644
---- a/libpiper/src/piper.cpp
-+++ b/libpiper/src/piper.cpp
+diff --git a/piper_orig/libpiper/src/piper.cpp b/piper_fixed/libpiper/src/piper.cpp
+index 774e87d..4b2301f 100644
+--- a/piper_orig/libpiper/src/piper.cpp
++++ b/piper_fixed/libpiper/src/piper.cpp
 @@ -5,6 +5,11 @@
  #include <fstream>
  #include <limits>
@@ -36,7 +36,7 @@ index 774e87d..49e12f5 100644
  #include <espeak-ng/speak_lib.h>
 
  using json = nlohmann::json;
-@@ -96,8 +101,16 @@
+@@ -96,8 +101,16 @@ struct piper_synthesizer *piper_create(const char *model_path,
      synth->session_options.DisableMemPattern();
      synth->session_options.DisableProfiling();
 
@@ -53,7 +53,7 @@ index 774e87d..49e12f5 100644
 
      return synth;
  }
-@@ -340,9 +353,17 @@
+@@ -340,9 +353,17 @@ int piper_synthesize_next(struct piper_synthesizer *synth,
                                                 "scales", "sid"};
 
      // Get all output names
