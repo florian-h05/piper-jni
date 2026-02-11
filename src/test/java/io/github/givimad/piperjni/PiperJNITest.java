@@ -132,7 +132,6 @@ public class PiperJNITest {
                 assertNotEquals(0, audioSamplesChunks.get(0).length);
                 Path outPath = Path.of(TEST_DIR, "test-stream.wav");
                 createWAVFile(audioSamplesChunks, sampleRate, outPath);
-                assertTrue(Files.exists(outPath));
                 verifyAudioFile(outPath);
             }
         } finally {

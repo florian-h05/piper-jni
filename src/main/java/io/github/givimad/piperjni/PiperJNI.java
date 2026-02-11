@@ -25,8 +25,7 @@ public class PiperJNI implements AutoCloseable {
 
     protected native int voiceSampleRate(int voiceRef);
 
-    private native short[] textToAudio(
-            int voiceRef, String text, AudioCallback audioCallback)
+    private native short[] textToAudio(int voiceRef, String text, AudioCallback audioCallback)
             throws IOException;
 
     private native String getVersion();
@@ -98,7 +97,7 @@ public class PiperJNI implements AutoCloseable {
      * @throws NotInitialized if piper was not initialized
      */
     public PiperVoice loadVoice(Path modelPath, Path modelConfigPath)
-            throws IOException, NotInitialized {
+            throws FileNotFoundException, NotInitialized {
         return loadVoice(modelPath, modelConfigPath, -1);
     }
 
@@ -112,9 +111,8 @@ public class PiperJNI implements AutoCloseable {
      * @throws FileNotFoundException if models or config doesn't exist
      * @throws NotInitialized if piper was not initialized
      */
-    public PiperVoice loadVoice(
-            Path modelPath, Path modelConfigPath, long speakerId)
-            throws IOException, NotInitialized {
+    public PiperVoice loadVoice(Path modelPath, Path modelConfigPath, long speakerId)
+            throws FileNotFoundException, NotInitialized {
         assertRegistered();
         assertInitialized();
         if (modelPath == null || !Files.exists(modelPath) || Files.isDirectory(modelPath)) {
