@@ -17,9 +17,16 @@ set(PIPER_SRC_DIR "${CMAKE_CURRENT_BINARY_DIR}/piper_patched/piper")
 file(REMOVE_RECURSE "${CMAKE_CURRENT_BINARY_DIR}/piper_patched")
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/src/main/native/piper" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/piper_patched" PATTERN ".git" EXCLUDE)
 
+# Find patch program
+find_program(PATCH_PROGRAM patch)
+if(NOT PATCH_PROGRAM)
+    message(FATAL_ERROR "patch program not found")
+endif()
+
 # Apply patch
+# Added --binary for Windows EOL handling and --ignore-whitespace for robustness
 execute_process(
-    COMMAND patch -p1 -i "${CMAKE_CURRENT_SOURCE_DIR}/src/main/native/piper_fixes.patch"
+    COMMAND "${PATCH_PROGRAM}" -p1 --binary --ignore-whitespace -i "${CMAKE_CURRENT_SOURCE_DIR}/src/main/native/piper_fixes.patch"
     WORKING_DIRECTORY "${PIPER_SRC_DIR}"
     RESULT_VARIABLE patch_result
 )
@@ -85,11 +92,21 @@ else()
         set(ONNXRUNTIME_PREFIX "onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}")
     elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL aarch64)
         set(ONNXRUNTIME_PREFIX "onnxruntime-linux-aarch64-${ONNXRUNTIME_VERSION}")
+    elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL armv7l)
+        # Linux ARM 32-bit (armv7l)
+        # Use 1.14.1 as it is the last known good build for armv7l in prebuilt-apps or generally available
+        set(ONNXRUNTIME_VERSION "1.14.1")
+        set(ONNXRUNTIME_PREFIX "onnxruntime-linux-arm32-${ONNXRUNTIME_VERSION}")
+        # Note: This URL points to a community build or cached artifact for arm32
+        set(ONNXRUNTIME_URL "https://github.com/synesthesiam/prebuilt-apps/releases/download/v1.0/onnxruntime-linux-arm32-${ONNXRUNTIME_VERSION}.tgz")
     endif()
     set(ONNXRUNTIME_EXT "tgz")
 endif()
 
-set(ONNXRUNTIME_URL "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/${ONNXRUNTIME_PREFIX}.${ONNXRUNTIME_EXT}")
+if(NOT DEFINED ONNXRUNTIME_URL)
+    set(ONNXRUNTIME_URL "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/${ONNXRUNTIME_PREFIX}.${ONNXRUNTIME_EXT}")
+endif()
+
 set(ONNXRUNTIME_DIR "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime")
 
 if(NOT EXISTS "${ONNXRUNTIME_DIR}")
