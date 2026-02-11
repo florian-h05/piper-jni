@@ -24,18 +24,19 @@ diff --git a/libpiper/src/piper.cpp b/libpiper/src/piper.cpp
 index 774e87d..49e12f5 100644
 --- a/libpiper/src/piper.cpp
 +++ b/libpiper/src/piper.cpp
-@@ -5,6 +5,10 @@
+@@ -5,6 +5,11 @@
  #include <fstream>
  #include <limits>
 
 +#ifdef _WIN32
++#define NOMINMAX
 +#include <windows.h>
 +#endif
 +
  #include <espeak-ng/speak_lib.h>
 
  using json = nlohmann::json;
-@@ -96,8 +100,16 @@
+@@ -96,8 +101,16 @@
      synth->session_options.DisableMemPattern();
      synth->session_options.DisableProfiling();
 
@@ -52,7 +53,7 @@ index 774e87d..49e12f5 100644
 
      return synth;
  }
-@@ -340,9 +352,17 @@
+@@ -340,9 +353,17 @@
                                                 "scales", "sid"};
 
      // Get all output names
