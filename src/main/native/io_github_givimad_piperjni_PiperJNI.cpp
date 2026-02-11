@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <mutex>
+#include <random>
 #include "io_github_givimad_piperjni_PiperJNI.h"
 #include "piper.h"
 #include "piper_impl.hpp"
@@ -13,6 +14,7 @@
 #define XSTR(x) STR(x)
 
 std::map<int, piper_synthesizer*> voiceMap;
+std::mutex voiceMapMutex;
 
 // Disable library log
 class StartUp
@@ -52,10 +54,46 @@ void swallow_cpp_exception_and_throw_java(JNIEnv * env) {
     }
 }
 
+// RAII Wrapper for JNI String
+class JNIString {
+    JNIEnv* env;
+    jstring jstr;
+    const char* cstr;
+
+public:
+    JNIString(JNIEnv* env, jstring jstr) : env(env), jstr(jstr), cstr(nullptr) {
+        if (jstr) {
+            cstr = env->GetStringUTFChars(jstr, NULL);
+        }
+    }
+
+    ~JNIString() {
+        if (cstr) {
+            env->ReleaseStringUTFChars(jstr, cstr);
+        }
+    }
+
+    const char* get() const {
+        return cstr;
+    }
+
+    operator const char*() const {
+        return cstr;
+    }
+
+    bool isValid() const {
+        return !jstr || cstr != nullptr;
+    }
+};
+
 int getVoiceId() {
+    static thread_local std::mt19937 rng(std::random_device{}());
+    std::uniform_int_distribution<int> dist(1, 2147483647); // Positive integers
+
     int i = 0;
     while (i++ < 1000) {
-        int id = rand();
+        int id = dist(rng);
+        // Caller must hold voiceMapMutex
         if(!voiceMap.count(id)) {
             return id;
         }
@@ -66,22 +104,18 @@ int getVoiceId() {
 // JNI Implementations
 
 JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_loadVoice(JNIEnv *env, jobject thisObject, jstring espeakDataPath, jstring modelPath, jstring modelConfigPath, jlong jSpeakerId) {
+    piper_synthesizer* voice = nullptr;
     try {
-        const char* cEspeakDataPath = nullptr;
-        if (espeakDataPath) {
-             cEspeakDataPath = env->GetStringUTFChars(espeakDataPath, NULL);
+        JNIString cEspeakDataPath(env, espeakDataPath);
+        JNIString cModelPath(env, modelPath);
+        JNIString cModelConfigPath(env, modelConfigPath);
+
+        if (!cModelPath.isValid() || !cModelConfigPath.isValid() || (espeakDataPath && !cEspeakDataPath.isValid())) {
+             NewJavaException(env, "java/lang/OutOfMemoryError", "Failed to allocate string chars");
+             return -1;
         }
 
-        const char* cModelPath = env->GetStringUTFChars(modelPath, NULL);
-        const char* cModelConfigPath = env->GetStringUTFChars(modelConfigPath, NULL);
-
-        piper_synthesizer* voice = piper_create(cModelPath, cModelConfigPath, cEspeakDataPath);
-
-        env->ReleaseStringUTFChars(modelPath, cModelPath);
-        env->ReleaseStringUTFChars(modelConfigPath, cModelConfigPath);
-        if (espeakDataPath) {
-             env->ReleaseStringUTFChars(espeakDataPath, cEspeakDataPath);
-        }
+        voice = piper_create(cModelPath, cModelConfigPath, cEspeakDataPath);
 
         if (!voice) {
              NewJavaException(env, "java/lang/RuntimeException", "Failed to load voice");
@@ -93,10 +127,14 @@ JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_loadVoice(JNIEnv
              voice->speaker_id = (SpeakerId)jSpeakerId;
         }
 
+        std::lock_guard<std::mutex> lock(voiceMapMutex);
         int ref = getVoiceId();
         voiceMap.insert({ref, voice});
         return ref;
     } catch (const std::exception&) {
+        if (voice) {
+            piper_free(voice);
+        }
         swallow_cpp_exception_and_throw_java(env);
         return -1;
     }
@@ -113,6 +151,7 @@ JNIEXPORT jboolean JNICALL Java_io_github_givimad_piperjni_PiperJNI_voiceUsesESp
 
 JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_voiceSampleRate(JNIEnv *env, jobject thisObject, jint voiceRef) {
     try {
+        std::lock_guard<std::mutex> lock(voiceMapMutex);
         return (jint) voiceMap.at(voiceRef)->sample_rate;
     } catch (const std::exception&) {
         swallow_cpp_exception_and_throw_java(env);
@@ -121,6 +160,7 @@ JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_voiceSampleRate(
 }
 
 JNIEXPORT void JNICALL Java_io_github_givimad_piperjni_PiperJNI_freeVoice(JNIEnv *env, jobject thisObject, jint voiceRef) {
+    std::lock_guard<std::mutex> lock(voiceMapMutex);
     if (voiceMap.count(voiceRef)) {
         piper_free(voiceMap.at(voiceRef));
         voiceMap.erase(voiceRef);
@@ -129,14 +169,21 @@ JNIEXPORT void JNICALL Java_io_github_givimad_piperjni_PiperJNI_freeVoice(JNIEnv
 
 JNIEXPORT jshortArray JNICALL Java_io_github_givimad_piperjni_PiperJNI_textToAudio(JNIEnv *env, jobject thisObject, jint voiceRef, jstring jText, jobject jAudioCallback) {
     try {
-        piper_synthesizer* voice = voiceMap.at(voiceRef);
-        const char* cText = env->GetStringUTFChars(jText, NULL);
-        std::string cppText(cText);
-        env->ReleaseStringUTFChars(jText, cText);
+        piper_synthesizer* voice = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(voiceMapMutex);
+            voice = voiceMap.at(voiceRef);
+        }
+
+        JNIString cppText(env, jText);
+        if (!cppText.isValid()) {
+             NewJavaException(env, "java/lang/OutOfMemoryError", "Failed to allocate string chars");
+             return NULL;
+        }
 
         piper_synthesize_options options = piper_default_synthesize_options(voice);
 
-        if (piper_synthesize_start(voice, cppText.c_str(), &options) != PIPER_OK) {
+        if (piper_synthesize_start(voice, cppText.get(), &options) != PIPER_OK) {
              NewJavaException(env, "java/lang/RuntimeException", "Failed to start synthesis");
              return NULL;
         }
@@ -150,6 +197,7 @@ JNIEXPORT jshortArray JNICALL Java_io_github_givimad_piperjni_PiperJNI_textToAud
         if (jAudioCallback) {
              cbClass = env->GetObjectClass(jAudioCallback);
              cbMethodId = env->GetMethodID(cbClass, "onAudio", "([S)V");
+             if (!cbMethodId) return NULL;
         }
 
         while ((ret = piper_synthesize_next(voice, &chunk)) != PIPER_DONE) {
@@ -171,13 +219,27 @@ JNIEXPORT jshortArray JNICALL Java_io_github_givimad_piperjni_PiperJNI_textToAud
 
                   if (jAudioCallback) {
                         jshortArray jAudioBuffer = env->NewShortArray(chunkSamples.size());
+                        if (!jAudioBuffer) {
+                             NewJavaException(env, "java/lang/OutOfMemoryError", "Failed to allocate audio buffer");
+                             return NULL;
+                        }
+
                         jshort *jSamples = env->GetShortArrayElements(jAudioBuffer, NULL);
+                        if (!jSamples) {
+                             NewJavaException(env, "java/lang/OutOfMemoryError", "Failed to get array elements");
+                             return NULL;
+                        }
+
                         for (size_t index = 0; index < chunkSamples.size(); ++index) {
                             jSamples[index]= (jshort) chunkSamples[index];
                         }
                         env->ReleaseShortArrayElements(jAudioBuffer, jSamples, 0);
                         env->CallVoidMethod(jAudioCallback, cbMethodId, jAudioBuffer);
                         env->DeleteLocalRef(jAudioBuffer);
+
+                        if (env->ExceptionCheck()) {
+                             return NULL;
+                        }
                   } else {
                         fullAudioBuffer.insert(fullAudioBuffer.end(), chunkSamples.begin(), chunkSamples.end());
                   }
@@ -186,7 +248,15 @@ JNIEXPORT jshortArray JNICALL Java_io_github_givimad_piperjni_PiperJNI_textToAud
 
         if (!jAudioCallback) {
             jshortArray jAudioBuffer = env->NewShortArray(fullAudioBuffer.size());
+            if (!jAudioBuffer) {
+                 NewJavaException(env, "java/lang/OutOfMemoryError", "Failed to allocate full audio buffer");
+                 return NULL;
+            }
             jshort *jSamples = env->GetShortArrayElements(jAudioBuffer, NULL);
+            if (!jSamples) {
+                 NewJavaException(env, "java/lang/OutOfMemoryError", "Failed to get array elements");
+                 return NULL;
+            }
             for (size_t index = 0; index < fullAudioBuffer.size(); ++index) {
                 jSamples[index]= (jshort) fullAudioBuffer[index];
             }
