@@ -3,7 +3,7 @@
 #include <vector>
 #include <string>
 #include <mutex>
-#include <random>
+#include <memory>
 #include "io_github_givimad_piperjni_PiperJNI.h"
 #include "piper.h"
 #include "piper_impl.hpp"
@@ -13,7 +13,18 @@
 #define STR(x) #x
 #define XSTR(x) STR(x)
 
-std::map<int, piper_synthesizer*> voiceMap;
+// Custom deleter for piper_synthesizer to use with smart pointers
+struct PiperDeleter {
+    void operator()(piper_synthesizer* p) const {
+        if (p) {
+            piper_free(p);
+        }
+    }
+};
+
+using PiperVoicePtr = std::shared_ptr<piper_synthesizer>;
+
+std::map<int, PiperVoicePtr> voiceMap;
 std::mutex voiceMapMutex;
 
 // Disable library log
@@ -87,24 +98,19 @@ public:
 };
 
 int getVoiceId() {
-    static thread_local std::mt19937 rng(std::random_device{}());
-    std::uniform_int_distribution<int> dist(1, 2147483647); // Positive integers
-
-    int i = 0;
-    while (i++ < 1000) {
-        int id = dist(rng);
-        // Caller must hold voiceMapMutex
-        if(!voiceMap.count(id)) {
-            return id;
-        }
+    static int counter = 0;
+    // Caller must hold voiceMapMutex
+    int id = ++counter;
+    // Handle wrap around or existing (very rare)
+    while (voiceMap.count(id)) {
+         id = ++counter;
     }
-    throw std::runtime_error("Wrapper error: Unable to get voice id");
+    return id;
 }
 
 // JNI Implementations
 
 JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_loadVoice(JNIEnv *env, jobject thisObject, jstring espeakDataPath, jstring modelPath, jstring modelConfigPath, jlong jSpeakerId) {
-    piper_synthesizer* voice = nullptr;
     try {
         JNIString cEspeakDataPath(env, espeakDataPath);
         JNIString cModelPath(env, modelPath);
@@ -115,7 +121,7 @@ JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_loadVoice(JNIEnv
              return -1;
         }
 
-        voice = piper_create(cModelPath, cModelConfigPath, cEspeakDataPath);
+        PiperVoicePtr voice(piper_create(cModelPath, cModelConfigPath, cEspeakDataPath), PiperDeleter());
 
         if (!voice) {
              NewJavaException(env, "java/lang/RuntimeException", "Failed to load voice");
@@ -132,9 +138,6 @@ JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_loadVoice(JNIEnv
         voiceMap.insert({ref, voice});
         return ref;
     } catch (const std::exception&) {
-        if (voice) {
-            piper_free(voice);
-        }
         swallow_cpp_exception_and_throw_java(env);
         return -1;
     }
@@ -152,7 +155,11 @@ JNIEXPORT jboolean JNICALL Java_io_github_givimad_piperjni_PiperJNI_voiceUsesESp
 JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_voiceSampleRate(JNIEnv *env, jobject thisObject, jint voiceRef) {
     try {
         std::lock_guard<std::mutex> lock(voiceMapMutex);
-        return (jint) voiceMap.at(voiceRef)->sample_rate;
+        auto it = voiceMap.find(voiceRef);
+        if (it != voiceMap.end()) {
+             return (jint) it->second->sample_rate;
+        }
+        return 0;
     } catch (const std::exception&) {
         swallow_cpp_exception_and_throw_java(env);
         return 0;
@@ -161,18 +168,25 @@ JNIEXPORT jint JNICALL Java_io_github_givimad_piperjni_PiperJNI_voiceSampleRate(
 
 JNIEXPORT void JNICALL Java_io_github_givimad_piperjni_PiperJNI_freeVoice(JNIEnv *env, jobject thisObject, jint voiceRef) {
     std::lock_guard<std::mutex> lock(voiceMapMutex);
-    if (voiceMap.count(voiceRef)) {
-        piper_free(voiceMap.at(voiceRef));
-        voiceMap.erase(voiceRef);
-    }
+    voiceMap.erase(voiceRef);
+    // PiperDeleter will automatically call piper_free when the shared_ptr is destroyed
+    // and no other references exist (e.g. from running textToAudio calls).
 }
 
 JNIEXPORT jshortArray JNICALL Java_io_github_givimad_piperjni_PiperJNI_textToAudio(JNIEnv *env, jobject thisObject, jint voiceRef, jstring jText, jobject jAudioCallback) {
     try {
-        piper_synthesizer* voice = nullptr;
+        PiperVoicePtr voice;
         {
             std::lock_guard<std::mutex> lock(voiceMapMutex);
-            voice = voiceMap.at(voiceRef);
+            auto it = voiceMap.find(voiceRef);
+            if (it != voiceMap.end()) {
+                voice = it->second;
+            }
+        }
+
+        if (!voice) {
+             NewJavaException(env, "java/lang/IllegalArgumentException", "Invalid voice reference");
+             return NULL;
         }
 
         JNIString cppText(env, jText);
@@ -181,9 +195,9 @@ JNIEXPORT jshortArray JNICALL Java_io_github_givimad_piperjni_PiperJNI_textToAud
              return NULL;
         }
 
-        piper_synthesize_options options = piper_default_synthesize_options(voice);
+        piper_synthesize_options options = piper_default_synthesize_options(voice.get());
 
-        if (piper_synthesize_start(voice, cppText.get(), &options) != PIPER_OK) {
+        if (piper_synthesize_start(voice.get(), cppText.get(), &options) != PIPER_OK) {
              NewJavaException(env, "java/lang/RuntimeException", "Failed to start synthesis");
              return NULL;
         }
@@ -200,7 +214,7 @@ JNIEXPORT jshortArray JNICALL Java_io_github_givimad_piperjni_PiperJNI_textToAud
              if (!cbMethodId) return NULL;
         }
 
-        while ((ret = piper_synthesize_next(voice, &chunk)) != PIPER_DONE) {
+        while ((ret = piper_synthesize_next(voice.get(), &chunk)) != PIPER_DONE) {
              if (ret != PIPER_OK) {
                   // Error
                   break;
